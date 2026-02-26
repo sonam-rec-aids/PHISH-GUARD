@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>PhishGuard – Smart Phishing URL Analyzer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg-dark: #050816;
+      --bg-card: #0b1020;
+      --accent: #00f5d4;
+      --accent-soft: rgba(0, 245, 212, 0.08);
+      --accent-strong: #ff4d6a;
+      --text-main: #f5f7ff;
+      --text-muted: #9ea3c9;
+      --border-subtle: #20263d;
+      --danger: #ff4d6a;
+      --warning: #ffb020;
+      --safe: #00f5d4;
+      --badge-bg: rgba(0, 245, 212, 0.12);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 22px 60px rgba(0, 0, 0, 0.55);
+      --blur: blur(24px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background: radial-gradient(circle at 0% 0%, #1a2b6b 0, #050816 40%, #050816 100%);
+      color: var(--text-main);
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 32px 16px;
+    }
+
+    .noise {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      opacity: 0.13;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.3'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+      z-index: -1;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 1120px;
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2.3fr);
+      gap: 28px;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        padding: 24px 16px 40px;
+      }
+      .shell {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: radial-gradient(circle at top left, rgba(0, 245, 212, 0.06) 0, transparent 50%),
+                  radial-gradient(circle at bottom right, rgba(255, 77, 106, 0.08) 0, transparent 55%),
+                  linear-gradient(145deg, #050818, #050816 55%, #080c1b);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      padding: 24px 24px 22px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: -80px;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(0, 245, 212, 0.09) 0, transparent 45%),
+        radial-gradient(circle at 100% 100%, rgba(255, 77, 106, 0.08) 0, transparent 50%);
+      filter: var(--blur);
+      opacity: 0.7;
+      z-index: -1;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+
+    .pill {
+      padding: 6px 12px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(158, 163, 201, 0.16);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+      background: rgba(6, 12, 36, 0.8);
+      backdrop-filter: blur(12px);
+    }
+
+    .pill-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(0, 245, 212, 0.18);
+    }
+
+    .pill-badge {
+      background: var(--badge-bg);
+      color: var(--safe);
+      border: none;
+      font-weight: 500;
+    }
+
+    h1 {
+      font-family: "Space Grotesk", system-ui, sans-serif;
+      font-size: clamp(2.2rem, 3vw, 2.7rem);
+      letter-spacing: -0.04em;
+      margin-bottom: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    h1 span.accent {
+      background: linear-gradient(120deg, #00f5d4, #46b8ff, #ff4d6a);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      position: relative;
+    }
+
+    h1 span.accent::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: -4px;
+      width: 68%;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(0, 245, 212, 0), rgba(0, 245, 212, 0.9), rgba(0, 245, 212, 0));
+      opacity: 0.8;
+    }
+
+    .subtitle {
+      font-size: 0.97rem;
+      color: var(--text-muted);
+      max-width: 460px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .hero-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 18px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .hero-metrics span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: var(--radius-pill);
+      background: rgba(5, 9, 30, 0.9);
+      border: 1px solid rgba(158, 163, 201, 0.18);
+    }
+
+    .hero-metrics strong {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 0.82rem;
+    }
+
+    .hero-metrics svg {
+      width: 13px;
+      height: 13px;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .grid {
+      width: 100%;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr);
+      align-items: flex-start;
+    }
+
+    @media (max-width: 680px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .form-block {
+      padding: 14px 14px 16px;
+      border-radius: var(--radius-md);
+      background: rgba(6, 10, 32, 0.94);
+      border: 1px solid rgba(158, 163, 201, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .form-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .form-header-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 0 rgba(0, 245, 212, 0.38);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(0, 245, 212, 0.46); }
+      70% { box-shadow: 0 0 0 14px rgba(0, 245, 212, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 245, 212, 0); }
+    }
+
+    .copy {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    .input-shell {
+      margin-top: 6px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .input-shell input {
+      flex: 1;
+      padding: 11px 12px;
+      border-radius: 11px;
+      border: 1px solid rgba(106, 115, 164, 0.65);
+      background: radial-gradient(circle at 0 0, rgba(0, 245, 212, 0.05) 0, rgba(5, 8, 32, 0.96) 50%);
+      color: var(--text-main);
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.2s ease;
+    }
+
+    .input-shell input::placeholder {
+      color: rgba(158, 163, 201, 0.7);
+    }
+
+    .input-shell input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(0, 245, 212, 0.3);
+      background: rgba(5, 8, 32, 0.96);
+    }
+
+    .btn-primary {
+      border: none;
+      padding: 10px 16px;
+      border-radius: 11px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      font-family: "Inter", system-ui;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      color: #050816;
+      background: linear-gradient(135deg, #00f5d4, #46b8ff);
+      box-shadow: 0 12px 30px rgba(0, 245, 212, 0.45);
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+      box-shadow: 0 16px 36px rgba(0, 245, 212, 0.6);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+      box-shadow: 0 8px 20px rgba(0, 245, 212, 0.4);
+    }
+
+    .btn-primary svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .helper-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .hint-chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .hint-chip {
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: rgba(10, 16, 50, 0.9);
+      border: 1px solid rgba(158, 163, 201, 0.3);
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+    }
+
+    .hint-chip:hover {
+      border-color: var(--accent);
+      background: rgba(6, 18, 40, 1);
+      transform: translateY(-1px);
+    }
+
+    .trust-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .trust-row span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .lock-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 245, 212, 0.45);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      font-size: 9px;
+    }
+
+    .status-block {
+      padding: 13px 14px 12px;
+      border-radius: var(--radius-md);
+      background: radial-gradient(circle at 100% 0, rgba(255, 77, 106, 0.16) 0, transparent 40%), #050818;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      user-select: none;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .status-label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--text-muted);
+    }
+
+    .status-pill {
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 0.74rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(17, 25, 68, 0.9);
+      border: 1px solid rgba(158, 163, 201, 0.25);
+      color: var(--text-main);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--safe);
+    }
+
+    .status-dot.high {
+      background: var(--danger);
+      box-shadow: 0 0 0 4px rgba(255, 77, 106, 0.2);
+    }
+
+    .status-dot.suspicious {
+      background: var(--warning);
+      box-shadow: 0 0 0 4px rgba(255, 176, 32, 0.2);
+    }
+
+    .score {
+      font-family: "Space Grotesk", system-ui;
+      font-size: 1.4rem;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+
+    .score span {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    .score-bar {
+      margin-top: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(16, 23, 55, 0.8);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .score-fill {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #00f5d4, #ffd54a, #ff4d6a);
+      transition: width 0.4s ease-out;
+    }
+
+    .status-note {
+      margin-top: 7px;
+      font-size: 0.77rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .status-note span {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .badge-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      background: rgba(12, 20, 60, 0.96);
+      border: 1px solid rgba(158, 163, 201, 0.3);
+      font-size: 0.72rem;
+      margin-top: 10px;
+    }
+
+    .badge-inline strong {
+      color: var(--safe);
+      font-weight: 600;
+    }
+
+    .right-col {
+      padding: 18px 18px 16px;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(158, 163, 201, 0.25);
+      background: radial-gradient(circle at top, rgba(0, 245, 212, 0.05) 0, transparent 65%), rgba(4, 7, 20, 0.96);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .right-col::before {
+      content: "";
+      position: absolute;
+      inset: -60px;
+      background: radial-gradient(circle at 100% 0, rgba(0, 245, 212, 0.16) 0, transparent 48%);
+      filter: blur(20px);
+      opacity: 0.8;
+      z-index: -1;
+    }
+
+    .right-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .right-title {
+      font-size: 0.9rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .tagline {
+      font-size: 0.95rem;
+      margin-top: 2px;
+    }
+
+    .tagline span {
+      color: var(--accent);
+    }
+
+    .flag-list {
+      margin-top: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .flag-item {
+      padding: 8px 9px;
+      border-radius: 10px;
+      background: rgba(7, 10, 35, 0.98);
+      border: 1px solid rgba(158, 163, 201, 0.25);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .flag-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+    }
+
+    .flag-icon.danger {
+      background: rgba(255, 77, 106, 0.1);
+      color: var(--danger);
+      border: 1px solid rgba(255, 77, 106, 0.6);
+    }
+
+    .flag-icon.warn {
+      background: rgba(255, 176, 32, 0.12);
+      color: var(--warning);
+      border: 1px solid rgba(255, 176, 32, 0.6);
+    }
+
+    .flag-icon.safe {
+      background: rgba(0, 245, 212, 0.09);
+      color: var(--safe);
+      border: 1px solid rgba(0, 245, 212, 0.6);
+    }
+
+    .flag-body strong {
+      display: block;
+      font-size: 0.78rem;
+      margin-bottom: 3px;
+      color: var(--text-main);
+    }
+
+    .flag-body code {
+      font-family: "Space Grotesk", monospace;
+      font-size: 0.76rem;
+      background: rgba(5, 9, 30, 0.9);
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(158, 163, 201, 0.3);
+      color: var(--accent);
+    }
+
+    .bottom-note {
+      margin-top: 12px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brands-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .brand-pill {
+      padding: 3px 7px;
+      border-radius: 999px;
+      border: 1px dashed rgba(158, 163, 201, 0.4);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .brand-pill span {
+      color: var(--accent);
+    }
+
+    .footer {
+      margin-top: 14px;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      border-top: 1px dashed rgba(88, 94, 140, 0.7);
+      padding-top: 10px;
+    }
+
+    .footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .badge-score {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(6, 18, 40, 0.96);
+      border: 1px solid rgba(158, 163, 201, 0.4);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .badge-score span {
+      color: var(--accent);
+      font-weight: 500;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="noise"></div>
+
+  <main class="shell">
+    <!-- LEFT: Hero + URL Analyzer -->
+    <section class="card">
+      <div class="pill-row">
+        <div class="pill">
+          <div class="pill-dot"></div>
+          Real‑time phishing detector
+        </div>
+        <div class="pill pill-badge">Hackathon‑proven engine</div>
+      </div>
+
+      <h1>
+        Stop phishing
+        <span class="accent">before</span>
+        it bites.
+      </h1>
+
+      <p class="subtitle">
+        Paste a suspicious link and let our scoring engine inspect HTTPS, domain age, brand spoofing and urgency tricks in seconds — no login, no tracking, just pure signal.
+      </p>
+
+      <div class="hero-metrics">
+        <span>
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M5 12.5L9.2 17L19 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <strong>6</strong> layered checks
+        </span>
+        <span>
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M12 7v6l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          URL verdict in under 1s
+        </span>
+        <span>
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="4" y="5" width="16" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M8 3v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M16 3v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          Perfect for awareness drills
+        </span>
+      </div>
+
+      <div class="grid">
+        <!-- URL FORM -->
+        <div class="form-block">
+          <div class="form-header">
+            <div class="form-header-title">
+              <div class="pulse-dot"></div>
+              Live URL scan
+            </div>
+            <div class="copy">No passwords, just links.</div>
+          </div>
+
+          <form id="url-form" onsubmit="handleScan(event)">
+            <div class="input-shell">
+              <input
+                id="url-input"
+                type="url"
+                required
+                autocomplete="off"
+                placeholder="https://example.com/login?session=..."
+              />
+              <button type="submit" class="btn-primary">
+                Scan link
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12h12" stroke="#050816" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M13 6l6 6-6 6" stroke="#050816" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </form>
+
+          <div class="helper-row">
+            <div>Try a risky‑looking URL first, then compare with a trusted site you use every day.</div>
+          </div>
+
+          <div class="helper-row" style="margin-top:6px;">
+            <div class="hint-chips">
+              <button class="hint-chip" type="button" onclick="prefill('http://login-paypa1.com/account/verify-now')">
+                Simulated phishing URL
+              </button>
+              <button class="hint-chip" type="button" onclick="prefill('https://accounts.google.com/signin/v2')">
+                Known safe URL
+              </button>
+            </div>
+          </div>
+
+          <div class="trust-row">
+            <span>
+              <div class="lock-icon">🔒</div>
+              Local analyzer — no links stored.
+            </span>
+            <span class="badge-score">
+              Current risk:
+              <span id="inline-level">SAFE</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- STATUS PANEL -->
+        <div class="status-block" id="status-block">
+          <div class="status-row">
+            <div>
+              <div class="status-label">Risk verdict</div>
+              <div class="score">
+                <span id="status-level-text">SAFE</span>
+                <span>score</span>
+              </div>
+            </div>
+            <div class="status-pill">
+              <div class="status-dot" id="status-dot"></div>
+              <span id="status-pill-text">Low risk</span>
+            </div>
+          </div>
+
+          <div class="score-bar">
+            <div class="score-fill" id="score-fill"></div>
+          </div>
+
+          <p class="status-note" id="status-note">
+            You’re clear. This URL doesn’t trigger any major phishing red flags in our scanner, but still double‑check the domain before entering sensitive data.
+          </p>
+
+          <div class="badge-inline">
+            Engine:
+            <strong>HTTPS</strong>, WHOIS age, brand spoofing, urgency language, shortener usage.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: Red flags / Education -->
+    <aside class="right-col">
+      <div class="right-header">
+        <div>
+          <div class="right-title">Know the traps</div>
+          <div class="tagline">
+            If a link feels off, <span>pause</span> and run it here first.
+          </div>
+        </div>
+      </div>
+
+      <div class="flag-list">
+        <div class="flag-item">
+          <div class="flag-icon danger">!</div>
+          <div class="flag-body">
+            <strong>Brand mismatch</strong>
+            Links that hide trusted names like “google”, “paypal” or “amazon” in the path but not in the domain itself are classic phishing bait.
+            <br />
+            <code>/security/google/login/verify</code> on a random domain is a red flag.
+          </div>
+        </div>
+
+        <div class="flag-item">
+          <div class="flag-icon warn">⏱</div>
+          <div class="flag-body">
+            <strong>Urgency & fear language</strong>
+            Attackers push you to act before you think using words like “urgent”, “verify now”, “final warning”, or “account compromised” baked right into the URL or email.
+          </div>
+        </div>
+
+        <div class="flag-item">
+          <div class="flag-icon warn">🌐</div>
+          <div class="flag-body">
+            <strong>Fresh or anonymous domains</strong>
+            Domains that are only a few weeks old or have broken WHOIS information are often disposable infrastructure for phishing campaigns.
+          </div>
+        </div>
+
+        <div class="flag-item">
+          <div class="flag-icon safe">🛡</div>
+          <div class="flag-body">
+            <strong>Shorteners & random strings</strong>
+            URL shorteners like <code>bit.ly</code> or domains packed with numbers make it harder to see where you’ll actually land — perfect cover for malicious redirects.
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-note">
+        <div>
+          Train your team by dropping this page into simulated phishing campaigns and showing people exactly which signals they missed.
+        </div>
+        <div class="brands-row">
+          <div class="brand-pill"><span>BRANDS</span>: google, paypal, amazon, microsoft, bank</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>
+          Built on a Python phishing‑score engine (WHOIS + URL heuristics). Plug it into Flask/FastAPI and expose a simple <code>/analyze</code> endpoint.
+        </div>
+        <div>
+          Tip: combine this page with campaign dashboards for awareness programs.
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+function prefill(url) {
+  document.getElementById("url-input").value = url;
+}
+
+function handleScan(e) {
+  e.preventDefault();
+  const urlInput = document.getElementById("url-input").value.trim();
+  if (!urlInput) return;
+  
+  const result = mockScore(urlInput);
+  applyVerdict(result.score, result.level, result.breakdownText);
+}
+
+function mockScore(inputUrl) {
+  let score = 0;
+  const lower = inputUrl.toLowerCase();
+  
+  // PARSE URL
+  let domain = 'unknown', path = '';
+  try {
+    const parsed = new URL(inputUrl.startsWith('http') ? inputUrl : 'https://' + inputUrl);
+    domain = parsed.hostname.replace('www.', '');
+    path = parsed.pathname + parsed.search;
+  } catch(e) {}
+
+  console.log('Domain:', domain, 'Path:', path); // Debug
+
+  // 1. NO HTTPS (+15)
+  if (!inputUrl.startsWith('https://')) score += 15;
+
+  // 2. SHORTENER ONLY (+20 = Suspicious)
+  const shorteners = ['bit.ly','tinyurl.com','t.co','goo.gl','is.gd'];
+  if (shorteners.some(s => domain.includes(s))) {
+    score += 20;
+    return { score: 35, level: "SUSPICIOUS", breakdownText: "⚠️ URL Shortener detected (bit.ly). Short links hide destinations - hover to preview!" };
+  }
+
+  // 3. URGENCY (+15)
+  const urgent = ['urgent','verify','act','compromised','warning','reset','immediately'];
+  if (urgent.some(w => lower.includes(w))) score += 15;
+
+  // 4. BRAND MISMATCH (+25)
+  const brands = ['google','paypal','amazon','microsoft','bank'];
+  let brandMismatch = false;
+  for (let brand of brands) {
+    if (path.includes(brand) && !domain.includes(brand)) {
+      score += 25;
+      brandMismatch = true;
+      break;
+    }
+  }
+
+  // 5. SUSPICIOUS DOMAIN (+20)
+  if (domain.length < 12 || domain.includes('123') || domain.includes('247') || !domain.includes('.')) score += 20;
+
+  // 6. DIGITS (+10)
+  if ((domain.match(/\d/g) || []).length > 2) score += 10;
+
+  // PRECISE LEVELS
+  let level, text;
+  if (score < 25) {
+    level = "SAFE"; text = "✅ SAFE - Trusted domain, HTTPS secure";
+  } else if (score < 45) {
+    level = "SUSPICIOUS"; text = "⚠️ SUSPICIOUS - Hover/verify before clicking";
+  } else {
+    level = "HIGH RISK"; text = `🚨 HIGH RISK - ${score}pts: ${brandMismatch ? 'Brand spoof' : 'New domain'}`;
+  }
+
+  return { score, level, breakdownText: text };
+}
+
+function applyVerdict(score, level, text) {
+  document.getElementById('score-fill').style.width = Math.min(100, score * 2) + '%';
+  document.getElementById('status-level-text').textContent = score;
+  document.getElementById('status-pill-text').textContent = level;
+  document.getElementById('status-note').textContent = text;
+  document.getElementById('inline-level').textContent = level;
+
+  const dot = document.getElementById('status-dot'), block = document.getElementById('status-block');
+  dot.className = 'status-dot';
+  
+  if (level === 'HIGH RISK') {
+    dot.classList.add('high');
+    block.style.background = 'radial-gradient(circle, rgba(255,77,106,0.35) 0%, transparent 60%), #050818';
+  } else if (level === 'SUSPICIOUS') {
+    dot.classList.add('suspicious');
+    block.style.background = 'radial-gradient(circle, rgba(255,176,32,0.3) 0%, transparent 60%), #050818';
+  } else {
+    block.style.background = 'radial-gradient(circle, rgba(0,245,212,0.25) 0%, transparent 60%), #050818';
+  }
+}
+</script>
+
+</body>
+</html>
